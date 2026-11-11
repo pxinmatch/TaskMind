@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskMind — Telegram-бот: умный список задач и напоминаний</title>
+<meta name="description" content="Умный список задач и напоминаний прямо в Telegram. Записывайте задачи обычными словами — бот сам распознает дату, время, приоритет и категорию, и вовремя напомнит.">
+<meta name="keywords" content="Telegram бот, список задач, напоминания, TaskMind, планировщик, todo бот, продуктивность">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314b8a6'/%3E%3Cpath d='M18 33l10 10 18-22' stroke='%230f172a' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  /* ============ TaskMind standalone landing ============ */
+  :root{
+    --bg:#09090b; --panel:#131316; --panel-2:#18181b;
+    --border:rgba(255,255,255,.1); --border-soft:rgba(255,255,255,.05);
+    --text:#f4f4f5; --muted:#a1a1aa; --dim:#71717a;
+    --teal:#2dd4bf; --teal-strong:#14b8a6; --cyan:#22d3ee;
+    --danger:#f87171;
+    --radius:16px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+    min-height:100vh; display:flex; flex-direction:column; overflow-x:hidden;
+  }
+  ::selection{background:rgba(45,212,191,.35)}
+  a{color:inherit; text-decoration:none}
+  img,svg{display:block}
+  .container{max-width:1100px;margin:0 auto;padding:0 16px}
+  section{scroll-margin-top:76px}
+
+  /* ---------- header ---------- */
+  .site-header{position:fixed;inset:0 0 auto 0;z-index:50;transition:background .3s,border-color .3s;border-bottom:1px solid transparent}
+  .site-header.scrolled{background:rgba(9,9,11,.85);backdrop-filter:blur(10px);border-bottom-color:var(--border-soft)}
+  .header-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;letter-spacing:-.02em}
+  .brand-logo{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#2dd4bf,#06b6d4);box-shadow:0 8px 20px rgba(20,184,166,.25)}
+  .brand-badge{font-size:10px;font-weight:500;color:var(--teal);border:1px solid rgba(20,184,166,.4);
+    border-radius:999px;padding:1px 8px}
+  .nav{display:flex;gap:4px}
+  .nav a{padding:8px 12px;border-radius:10px;font-size:14px;color:var(--muted);transition:.2s}
+  .nav a:hover{background:rgba(255,255,255,.05);color:#fff}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
+    border:none;border-radius:12px;font-family:inherit;font-weight:600;font-size:14px;
+    padding:10px 18px;transition:.2s;color:var(--text)}
+  .btn-primary{background:var(--teal-strong);color:#0f172a}
+  .btn-primary:hover{background:var(--teal)}
+  .btn-ghost{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15)}
+  .btn-ghost:hover{background:rgba(255,255,255,.1)}
+  .btn-outline-teal{background:transparent;border:1px solid rgba(20,184,166,.3);color:var(--teal)}
+  .btn-outline-teal:hover{background:rgba(20,184,166,.1)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-lg{padding:14px 26px;font-size:16px;border-radius:14px}
+  .btn-sm{padding:8px 14px;font-size:13px}
+  .btn-icon{width:42px;height:42px;padding:0;flex-shrink:0}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;padding:140px 0 90px;overflow:hidden}
+  .hero::before{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(ellipse 60% 60% at 50% 40%,#000,transparent);
+            mask-image:radial-gradient(ellipse 60% 60% at 50% 40%,#000,transparent)}
+  .glow{position:absolute;border-radius:50%;pointer-events:none;filter:blur(120px)}
+  .glow-1{width:480px;height:480px;background:rgba(20,184,166,.15);top:-120px;left:-160px}
+  .glow-2{width:420px;height:420px;background:rgba(34,211,238,.1);top:160px;right:-160px}
+  .hero-grid{position:relative;display:grid;grid-template-columns:1fr;gap:56px;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;
+    border:1px solid rgba(45,212,191,.25);background:rgba(45,212,191,.1);
+    color:#5eead4;font-size:14px;padding:6px 14px}
+  .hero h1{margin-top:24px;font-size:clamp(34px,5vw,54px);line-height:1.12;letter-spacing:-.02em;font-weight:700}
+  .text-gradient{background:linear-gradient(90deg,#5eead4,#2dd4bf,#67e8f9);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero-sub{margin-top:20px;max-width:560px;font-size:18px;color:var(--muted)}
+  .hero-actions{margin-top:32px;display:flex;gap:12px;flex-wrap:wrap}
+  .hero-bullets{margin-top:32px;display:flex;flex-wrap:wrap;gap:8px 24px;list-style:none}
+  .hero-bullets li{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+  .check-ic{color:var(--teal);flex-shrink:0}
+
+  /* phone mockup */
+  .phone-wrap{position:relative;width:100%;max-width:340px;margin:0 auto}
+  .float-badge{position:absolute;z-index:2;display:flex;align-items:center;gap:8px;
+    background:rgba(24,24,27,.95);border:1px solid var(--border);border-radius:16px;
+    padding:10px 14px;font-size:12px;line-height:1.4;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+  .float-badge b{font-weight:600}
+  .float-badge span{color:var(--muted)}
+  .float-badge svg{color:var(--teal);flex-shrink:0}
+  .fb-1{top:-28px;right:-32px;animation:float 5s ease-in-out infinite}
+  .fb-2{bottom:70px;left:-40px;animation:float 6.5s ease-in-out 1.2s infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  .phone{border-radius:42px;border:1px solid var(--border);background:#18181b;padding:10px;
+    box-shadow:0 40px 80px rgba(20,83,74,.35)}
+  .phone-screen{border-radius:34px;background:#0c0c0e;overflow:hidden}
+  .phone-status{display:flex;justify-content:space-between;align-items:center;
+    padding:12px 24px 4px;font-size:11px;color:var(--dim)}
+  .phone-notch{width:96px;height:20px;border-radius:0 0 16px 16px;background:#18181b}
+  .chat-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border-soft)}
+  .avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;
+    background:linear-gradient(135deg,#2dd4bf,#06b6d4);color:#0f172a}
+  .chat-head-name{font-size:14px;font-weight:600}
+  .chat-head-status{font-size:12px;color:var(--teal);display:flex;align-items:center;gap:6px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);display:inline-block}
+  .phone-msgs{padding:16px 12px;display:flex;flex-direction:column;gap:10px;
+    background-image:radial-gradient(rgba(255,255,255,.04) 1px,transparent 1px);background-size:22px 22px}
+  .bubble{max-width:85%;padding:8px 12px;font-size:13px;line-height:1.45;white-space:pre-line;
+    border-radius:16px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .bubble-bot{align-self:flex-start;background:#26262b;color:#f4f4f5;border-bottom-left-radius:6px}
+  .bubble-user{align-self:flex-end;background:#0d9488;color:#fff;border-bottom-right-radius:6px}
+  .bubble-time{display:block;text-align:right;font-size:10px;opacity:.55;margin-top:2px}
+  .typing{display:inline-flex;gap:4px;padding:14px 16px}
+  .typing i{width:6px;height:6px;border-radius:50%;background:#a1a1aa;animation:tb 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+  @keyframes tb{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+  .phone-input{display:flex;align-items:center;gap:8px;padding:12px;border-top:1px solid var(--border-soft)}
+  .phone-input .fake-field{flex:1;height:36px;border-radius:999px;background:rgba(255,255,255,.05);
+    font-size:12px;line-height:36px;color:var(--dim);padding:0 16px}
+  .phone-input .send-circle{width:36px;height:36px;border-radius:50%;background:var(--teal-strong);
+    display:grid;place-items:center;color:#0f172a}
+
+  /* ---------- section headers ---------- */
+  .sec{padding:88px 0}
+  .sec-head{max-width:640px;margin:0 auto 48px;text-align:center}
+  .sec-head h2{font-size:clamp(28px,4vw,38px);letter-spacing:-.02em;font-weight:700}
+  .sec-head p{margin-top:16px;color:var(--muted);font-size:16px}
+
+  /* ---------- demo ---------- */
+  .demo-grid{display:grid;grid-template-columns:1fr;gap:24px;align-items:start}
+  .card{background:rgba(19,19,22,.8);border:1px solid var(--border);border-radius:20px;backdrop-filter:blur(8px)}
+  .chat-card{display:flex;flex-direction:column;overflow:hidden}
+  .chat-body{height:440px;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px;
+    background-image:radial-gradient(rgba(255,255,255,.04) 1px,transparent 1px);background-size:22px 22px}
+  .scroll-thin{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+  .scroll-thin::-webkit-scrollbar{width:6px;height:6px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:999px}
+  .bubble-msg-btns{display:flex;gap:8px;margin-top:10px}
+  .bubble-msg-btns button{flex:1;min-width:96px;padding:7px 12px;font-size:12px;font-weight:500;
+    border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.1);
+    color:var(--text);cursor:pointer;font-family:inherit;transition:.2s}
+  .bubble-msg-btns button:hover{background:rgba(255,255,255,.2)}
+  .chat-foot{border-top:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:12px}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .chip{flex-shrink:0;border-radius:999px;border:1px solid rgba(45,212,191,.25);
+    background:rgba(45,212,191,.1);color:#5eead4;font-size:12px;padding:6px 14px;
+    cursor:pointer;font-family:inherit;transition:.2s}
+  .chip:hover{background:rgba(45,212,191,.2)}
+  .chat-form{display:flex;gap:8px}
+  .chat-form input{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);
+    border-radius:12px;padding:11px 14px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:.2s}
+  .chat-form input:focus{border-color:rgba(45,212,191,.5)}
+  .chat-form input::placeholder{color:var(--dim)}
+
+  .tasks-card{padding:20px;display:flex;flex-direction:column}
+  .tasks-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .tasks-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+  .count-badge{background:rgba(45,212,191,.15);color:#5eead4;font-size:12px;font-weight:600;
+    border-radius:999px;padding:1px 9px}
+  .clear-btn{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);
+    background:none;border:none;cursor:pointer;font-family:inherit;transition:.2s}
+  .clear-btn:hover{color:#d4d4d8}
+  .progress-row{margin-top:16px}
+  .progress-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px}
+  .progress{height:6px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
+  .progress-fill{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--teal-strong),var(--cyan));transition:width .4s}
+  .task-list{margin-top:16px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;flex:1;padding-right:4px}
+  .task{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--border);
+    background:rgba(255,255,255,.03);border-radius:14px;padding:12px;transition:.2s}
+  .task:hover{border-color:rgba(45,212,191,.3)}
+  .task.done{opacity:.6;border-color:var(--border-soft);background:rgba(255,255,255,.02)}
+  .task input[type=checkbox]{appearance:none;width:18px;height:18px;border:1.5px solid rgba(255,255,255,.25);
+    border-radius:6px;margin-top:2px;cursor:pointer;flex-shrink:0;display:grid;place-items:center;transition:.15s}
+  .task input[type=checkbox]:checked{background:var(--teal-strong);border-color:var(--teal-strong)}
+  .task input[type=checkbox]:checked::after{content:'✓';font-size:12px;color:#0f172a;font-weight:700}
+  .task-title{font-size:14px;font-weight:500;word-break:break-word}
+  .task.done .task-title{color:var(--dim);text-decoration:line-through}
+  .task-meta{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;font-size:12px;align-items:center}
+  .meta-chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;
+    background:rgba(255,255,255,.06);padding:2px 7px;color:#d4d4d8}
+  .meta-high{background:rgba(248,113,113,.15);color:var(--danger)}
+  .meta-low{background:rgba(255,255,255,.05);color:var(--dim)}
+  .meta-repeat{background:rgba(45,212,191,.1);color:#5eead4}
+  .tag{color:rgba(45,212,191,.9)}
+  .no-due{color:var(--dim)}
+  .task-del{margin-left:auto;background:none;border:none;color:var(--dim);cursor:pointer;
+    padding:2px;transition:.2s;flex-shrink:0}
+  .task-del:hover{color:var(--danger)}
+  .tasks-empty{border:1px dashed var(--border);border-radius:14px;padding:40px 16px;text-align:center}
+  .tasks-empty .big{font-size:26px}
+  .tasks-empty p{font-size:13px;font-weight:500;color:#d4d4d8;margin-top:8px}
+  .tasks-empty small{font-size:12px;color:var(--dim);margin-top:4px;display:block}
+  .demo-hints{margin-top:32px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+    font-size:12px;color:var(--dim)}
+  .hint{display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+    border:1px solid var(--border);background:rgba(255,255,255,.03);padding:5px 12px}
+  .hint svg{color:var(--teal)}
+
+  /* ---------- features ---------- */
+  .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+  .feature{border:1px solid var(--border);background:rgba(19,19,22,.6);border-radius:20px;
+    padding:24px;transition:.3s}
+  .feature:hover{transform:translateY(-4px);border-color:rgba(45,212,191,.3);box-shadow:0 20px 40px rgba(20,83,74,.25)}
+  .feature-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    border:1px solid rgba(45,212,191,.2);background:rgba(45,212,191,.1);color:var(--teal)}
+  .feature h3{margin-top:16px;font-size:18px;font-weight:600}
+  .feature p{margin-top:8px;font-size:14px;color:var(--muted)}
+
+  /* ---------- how it works ---------- */
+  .how{position:relative}
+  .how::before{content:'';position:absolute;left:50%;top:50%;width:680px;height:380px;
+    transform:translate(-50%,-50%);border-radius:50%;background:rgba(20,184,166,.05);filter:blur(120px);pointer-events:none}
+  .steps{position:relative;display:grid;grid-template-columns:1fr;gap:40px;text-align:center}
+  .step{position:relative}
+  .step-ic{position:relative;width:64px;height:64px;margin:0 auto;border-radius:18px;
+    display:grid;place-items:center;background:var(--panel-2);border:1px solid rgba(45,212,191,.25);
+    box-shadow:0 16px 32px rgba(20,83,74,.35);color:var(--teal)}
+  .step-num{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;
+    background:var(--teal-strong);color:#0f172a;font-size:12px;font-weight:700;display:grid;place-items:center}
+  .step h3{margin-top:20px;font-size:18px;font-weight:600}
+  .step p{margin:8px auto 0;max-width:320px;font-size:14px;color:var(--muted)}
+  .step-sample{display:inline-block;margin-top:16px;border-radius:12px;
+    border:1px solid rgba(45,212,191,.2);background:rgba(45,212,191,.1);
+    color:#5eead4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:8px 16px}
+
+  /* ---------- stats ---------- */
+  .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;overflow:hidden;
+    border:1px solid var(--border);border-radius:20px;background:rgba(255,255,255,.1)}
+  .stat{background:#0a0a0c;padding:32px 20px;text-align:center}
+  .stat b{display:block;font-size:clamp(26px,3vw,36px);font-weight:700;letter-spacing:-.02em;
+    background:linear-gradient(90deg,#5eead4,#2dd4bf,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat span{display:block;margin-top:8px;font-size:14px;color:var(--muted)}
+
+  /* ---------- commands ---------- */
+  .cmd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+  .cmd{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--border);
+    background:rgba(19,19,22,.6);border-radius:14px;padding:16px;transition:.2s}
+  .cmd:hover{border-color:rgba(45,212,191,.25)}
+  .cmd code{border-radius:10px;border:1px solid rgba(45,212,191,.25);background:rgba(45,212,191,.1);
+    color:#5eead4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;
+    font-weight:600;padding:4px 10px;flex-shrink:0}
+  .cmd p{padding-top:3px;font-size:14px;color:var(--muted)}
+
+  /* ---------- faq ---------- */
+  .faq{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  details{border:1px solid var(--border);background:rgba(19,19,22,.6);border-radius:14px;
+    padding:0 20px;transition:border-color .2s}
+  details:hover{border-color:rgba(45,212,191,.25)}
+  details[open]{border-color:rgba(45,212,191,.3)}
+  summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+    gap:12px;padding:18px 0;font-size:15px;font-weight:500;transition:color .2s}
+  summary::-webkit-details-marker{display:none}
+  summary:hover{color:#5eead4}
+  summary svg{flex-shrink:0;color:var(--dim);transition:transform .25s}
+  details[open] summary svg{transform:rotate(180deg)}
+  .faq-a{padding:0 0 20px;font-size:14px;color:var(--muted);max-width:92%}
+
+  /* ---------- cta & footer ---------- */
+  .cta-card{position:relative;overflow:hidden;border-radius:28px;text-align:center;
+    border:1px solid rgba(45,212,191,.2);padding:56px 24px;
+    background:linear-gradient(135deg,rgba(20,184,166,.15),rgba(34,211,238,.05),transparent)}
+  .cta-card::before{content:'';position:absolute;top:-96px;left:50%;transform:translateX(-50%);
+    width:420px;height:256px;border-radius:50%;background:rgba(20,184,166,.2);filter:blur(100px);pointer-events:none}
+  .cta-card h2{position:relative;font-size:clamp(28px,4vw,38px);font-weight:700;letter-spacing:-.02em}
+  .cta-card p{position:relative;margin:16px auto 0;max-width:560px;color:var(--muted)}
+  .cta-actions{position:relative;margin-top:32px}
+  .cta-note{position:relative;margin-top:20px;font-size:12px;color:var(--dim)}
+  .site-footer{margin-top:auto;border-top:1px solid var(--border-soft);
+    padding-bottom:env(safe-area-inset-bottom)}
+  .footer-inner{display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    gap:16px;padding:32px 0}
+  .footer-brand{display:flex;align-items:center;gap:10px;font-size:14px}
+  .footer-brand .mini-logo{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#2dd4bf,#06b6d4);color:#0f172a}
+  .footer-brand b{font-weight:600}
+  .footer-brand span{color:var(--dim)}
+  .footer-nav{display:flex;gap:20px;font-size:14px;color:var(--muted)}
+  .footer-nav a:hover{color:#5eead4}
+
+  /* ---------- responsive ---------- */
+  @media (min-width:760px){
+    .steps{grid-template-columns:repeat(3,1fr);gap:24px}
+    .step:not(:last-child)::after{content:'';position:absolute;top:32px;left:calc(50% + 56px);
+      width:calc(100% - 112px);border-top:2px dashed rgba(45,212,191,.2)}
+    .stats-grid{grid-template-columns:repeat(4,1fr)}
+  }
+  @media (min-width:960px){
+    .hero{padding:170px 0 100px}
+    .hero-grid{grid-template-columns:1fr 1fr}
+    .demo-grid{grid-template-columns:3fr 2fr}
+    .footer-inner{flex-direction:row}
+  }
+  @media (max-width:759px){
+    .nav{display:none}
+    .fb-1{right:-8px}.fb-2{left:-8px}
+    .sec{padding:64px 0}
+    .faq-a{max-width:100%}
+    .ws-user-info{display:none}
+  }
+
+  /* ---------- upsell: аккаунт на сайте ---------- */
+  .upsell{padding:10px 0}
+  .upsell-card{position:relative;overflow:hidden;border-radius:20px;border:1px solid rgba(45,212,191,.25);
+    background:linear-gradient(180deg,rgba(20,184,166,.12),#131316 62%);padding:44px 28px;text-align:center}
+  .upsell-card::before{content:'';position:absolute;right:-90px;top:-90px;width:280px;height:280px;border-radius:50%;
+    background:rgba(20,184,166,.16);filter:blur(90px);pointer-events:none}
+  .upsell-card>*{position:relative}
+  .upsell-card h2{margin-top:20px;font-size:clamp(24px,3vw,30px);letter-spacing:-.02em}
+  .upsell-sub{max-width:520px;margin:12px auto 0;color:var(--muted)}
+  .upsell-perks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:30px;text-align:left}
+  .upsell-perk{border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:14px;padding:16px}
+  .upsell-perk svg{color:var(--teal)}
+  .upsell-perk b{display:block;margin-top:10px;font-size:14px}
+  .upsell-perk span{display:block;margin-top:5px;font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .upsell-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;margin-top:30px}
+  .upsell-actions small{color:var(--dim);font-size:12px}
+  @media (max-width:759px){.upsell-perks{grid-template-columns:1fr}}
+
+  /* ---------- диалог входа / регистрации ---------- */
+  .auth-overlay{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:16px;
+    background:rgba(2,2,4,.72);backdrop-filter:blur(6px)}
+  .auth-overlay.open{display:flex}
+  .auth-dialog{width:100%;max-width:410px;max-height:92vh;overflow-y:auto;border-radius:20px;border:1px solid var(--border);
+    background:#131316;box-shadow:0 40px 90px rgba(0,0,0,.65);padding:26px 24px}
+  .auth-brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
+  .auth-brand .brand-logo{width:40px;height:40px;border-radius:12px}
+  .auth-title{margin-top:16px;font-size:21px;font-weight:700;letter-spacing:-.02em}
+  .auth-desc{margin-top:4px;font-size:13.5px;color:var(--muted)}
+  .auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.05);
+    border-radius:12px;padding:4px;margin-top:16px}
+  .auth-tab{border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:600;
+    padding:8px;border-radius:9px;cursor:pointer;transition:.2s}
+  .auth-tab.active{background:var(--teal-strong);color:#0f172a}
+  .auth-form{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+  .auth-field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .auth-field-wrap{position:relative}
+  .auth-field-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none}
+  .auth-field input{width:100%;height:42px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.05);
+    color:#fff;font-family:inherit;font-size:14px;padding:0 12px 0 38px;outline:none;transition:border-color .2s}
+  .auth-field input:focus{border-color:rgba(45,212,191,.65)}
+  .auth-error{display:none;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.1);color:#fca5a5;
+    border-radius:10px;padding:8px 12px;font-size:13px}
+  .auth-error.show{display:block}
+  .auth-note{text-align:center;font-size:12px;color:var(--dim)}
+
+  /* ---------- рабочее пространство (после входа) ---------- */
+  .ws{display:none;min-height:100vh;flex-direction:column}
+  body.authed .ws{display:flex}
+  body.authed .landing{display:none}
+  .ws-topbar{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--border-soft);
+    background:rgba(9,9,11,.85);backdrop-filter:blur(10px)}
+  .ws-topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;height:64px}
+  .ws-user{display:flex;align-items:center;gap:12px;min-width:0}
+  .ws-user-info{text-align:right;line-height:1.25}
+  .ws-user-info b{display:block;font-size:13.5px;font-weight:600}
+  .ws-user-info span{display:block;font-size:11.5px;color:var(--dim)}
+  .ws-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;
+    background:rgba(20,184,166,.15);color:#5eead4;font-weight:700;font-size:14px;text-transform:uppercase}
+  .ws-main{padding-top:34px;padding-bottom:56px}
+  .ws-greet-row{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:24px}
+  .ws-greet-row h1{font-size:clamp(24px,3.4vw,32px);letter-spacing:-.02em}
+  .ws-date{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:14px;color:var(--muted)}
+  .ws-date svg{color:var(--teal)}
+  .ws-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+  .ws-stat{border:1px solid var(--border);background:#131316;border-radius:14px;padding:14px 16px}
+  .ws-stat-top{display:flex;align-items:center;justify-content:space-between}
+  .ws-stat-top span{font-size:12px;color:var(--dim)}
+  .ws-stat-top svg{width:16px;height:16px;color:var(--teal)}
+  .ws-stat b{display:block;margin-top:4px;font-size:24px;letter-spacing:-.02em}
+  .ws-grid{display:grid;grid-template-columns:3fr 2fr;gap:20px;align-items:start}
+  @media (max-width:959px){.ws-grid{grid-template-columns:1fr}.ws-stats{grid-template-columns:repeat(2,1fr)}}
+  .ws-chat-head-btn{margin-left:auto;background:none;border:none;color:var(--dim);cursor:pointer;padding:6px;border-radius:8px}
+  .ws-chat-head-btn:hover{color:#e4e4e7;background:rgba(255,255,255,.06)}
+  .ai-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(45,212,191,.15);color:#5eead4;
+    font-size:10px;font-weight:600;border-radius:6px;padding:1px 6px;margin-bottom:4px}
+  .quick-add{display:flex;gap:8px;margin-top:16px}
+  .quick-add input{flex:1;height:42px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.05);
+    color:#fff;font-family:inherit;font-size:14px;padding:0 12px;outline:none;transition:border-color .2s}
+  .quick-add input:focus{border-color:rgba(45,212,191,.65)}
+  .ws-toast{position:fixed;right:18px;bottom:18px;z-index:95;display:none;max-width:320px;border-radius:14px;
+    border:1px solid rgba(45,212,191,.3);background:#131316;box-shadow:0 18px 40px rgba(0,0,0,.5);padding:12px 16px}
+  .ws-toast.show{display:block;animation:toast-in .25s ease}
+  @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .ws-toast b{display:block;font-size:13.5px}
+  .ws-toast span{display:block;margin-top:2px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<!-- ============ LANDING (показывается до входа в аккаунт) ============ -->
+<div class="landing">
+
+<!-- ============ HEADER ============ -->
+<header class="site-header" id="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="#top" aria-label="TaskMind — на главную">
+      <span class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </span>
+      TaskMind
+      <span class="brand-badge">bot</span>
+    </a>
+    <nav class="nav" aria-label="Основная навигация">
+      <a href="#features">Возможности</a>
+      <a href="#demo">Демо</a>
+      <a href="#commands">Команды</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" id="btn-login-open" type="button">Войти</button>
+      <a class="btn btn-primary btn-sm" href="https://t.me/taskmind_bot" target="_blank" rel="noreferrer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        Открыть бота
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="top">
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="container hero-grid">
+      <div>
+        <span class="pill">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.2 2.2m8.4 8.4 2.2 2.2m0-12.8-2.2 2.2M7.8 16.2l-2.2 2.2"/></svg>
+          Telegram-бот для продуктивности
+        </span>
+        <h1>Умный список задач <span class="text-gradient">и напоминаний</span></h1>
+        <p class="hero-sub">Пишите задачи обычными словами — TaskMind сам распознает дату, время, приоритет и категорию. И обязательно напомнит вовремя.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="https://t.me/taskmind_bot" target="_blank" rel="noreferrer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            Открыть в Telegram
+          </a>
+          <a class="btn btn-ghost btn-lg" href="#demo">Попробовать демо</a>
+        </div>
+        <ul class="hero-bullets">
+          <li><svg class="check-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Без регистрации</li>
+          <li><svg class="check-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Работает на всех устройствах</li>
+          <li><svg class="check-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Бесплатно</li>
+        </ul>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="float-badge fb-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span><b>Напоминание</b><br>через 15 минут</span>
+        </div>
+        <div class="float-badge fb-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span><b>Разобрал дату</b><br>и время сам</span>
+        </div>
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-status"><span>9:41</span><span class="phone-notch"></span><span>▮▮</span></div>
+            <div class="chat-head">
+              <span class="avatar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg>
+              </span>
+              <div>
+                <div class="chat-head-name">TaskMind Bot</div>
+                <div class="chat-head-status"><span class="dot"></span>бот</div>
+              </div>
+            </div>
+            <div class="phone-msgs">
+              <div class="bubble bubble-bot">👋 Привет! Я TaskMind. Пишите задачи обычными словами — я сам всё разберу.</div>
+              <div class="bubble bubble-user">Купить хлеб завтра в 18:00<span class="bubble-time">9:38 ✓✓</span></div>
+              <div class="bubble bubble-bot">✅ Задача добавлена!
+⏰ Напомню: завтра, 18:00<span class="bubble-time">9:38 ✓✓</span></div>
+              <div class="bubble bubble-user">Созвон с командой завтра в 11:30 !важно #работа<span class="bubble-time">9:39 ✓✓</span></div>
+              <div class="bubble bubble-bot">✅ Принято!
+❗️ Высокий приоритет · 🏷 #работа
+⏰ Напомню: завтра, 11:30<span class="bubble-time">9:39 ✓✓</span></div>
+              <div class="bubble bubble-bot"><span class="typing"><i></i><i></i><i></i></span></div>
+            </div>
+            <div class="phone-input">
+              <div class="fake-field">Сообщение…</div>
+              <span class="send-circle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DEMO ============ -->
+  <section class="sec" id="demo">
+    <div class="container">
+      <div class="sec-head">
+        <span class="pill">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Живое демо
+        </span>
+        <h2 style="margin-top:20px">Попробуйте бота прямо здесь</h2>
+        <p>Это работает так же, как в Telegram. Введите задачу обычными словами — бот распознает дату, время, приоритет и категорию.</p>
+      </div>
+
+      <div class="demo-grid">
+        <!-- chat -->
+        <div class="card chat-card">
+          <div class="chat-head" style="padding:14px 16px">
+            <span class="avatar" style="width:40px;height:40px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg>
+            </span>
+            <div style="flex:1;min-width:0">
+              <div class="chat-head-name" style="display:flex;align-items:center;gap:8px">TaskMind Bot <span class="brand-badge">bot</span></div>
+              <div class="chat-head-status"><span class="dot"></span>онлайн</div>
+            </div>
+          </div>
+          <div class="chat-body scroll-thin" id="chat-messages" aria-live="polite"></div>
+          <div class="chat-foot">
+            <div class="chips scroll-thin" id="chips"></div>
+            <form class="chat-form" id="chat-form">
+              <input type="text" id="chat-input" placeholder="Например: Купить хлеб завтра в 18:00 #дом" aria-label="Текст задачи для бота" autocomplete="off">
+              <button type="submit" class="btn btn-primary btn-icon" aria-label="Отправить">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- tasks -->
+        <div class="card tasks-card">
+          <div class="tasks-head">
+            <h3 class="tasks-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal)"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 3 2 2 4-4"/><path d="M13 7h8M13 17h8"/><rect x="3" y="15" width="6" height="6" rx="1"/></svg>
+              Мои задачи
+              <span class="count-badge" id="count-badge">0</span>
+            </h3>
+            <button class="clear-btn" id="clear-done" style="display:none">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-4 7 4 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><path d="M3 5v14"/></svg>
+              Очистить
+            </button>
+          </div>
+          <div class="progress-row" id="progress-row" style="display:none">
+            <div class="progress-labels"><span id="progress-text">Выполнено 0 из 0</span><span id="progress-pct">0%</span></div>
+            <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
+          </div>
+          <div class="task-list scroll-thin" id="task-list"></div>
+          <button class="btn btn-outline-teal" id="btn-reminder" style="margin-top:16px;width:100%">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Демо-напоминание
+          </button>
+        </div>
+      </div>
+
+      <div class="demo-hints">
+        <span>Подсказки:</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>!важно — приоритет</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>#тег — категория</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>«завтра в 18:00» — дата и время</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>«через 2 часа» — относительное время</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>«каждый день» — повторы</span>
+        <span class="hint"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>«готово 1» — выполнить задачу</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ UPSELL: ACCOUNT ============ -->
+  <section class="upsell" id="account">
+    <div class="container">
+      <div class="upsell-card">
+        <span class="pill">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Новое: аккаунт на сайте
+        </span>
+        <h2>Демо хранит задачи только в браузере</h2>
+        <p class="upsell-sub">Создайте бесплатный аккаунт — и получите полноценную версию TaskMind с чатом ассистента и личным списком задач прямо на сайте.</p>
+        <div class="upsell-perks">
+          <div class="upsell-perk">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2h7a1 1 0 0 1 1 1v7l-9.3 9.3a1 1 0 0 1-1.4 0l-6.6-6.6a1 1 0 0 1 0-1.4Z"/><circle cx="16" cy="7" r="1"/></svg>
+            <b>Личное пространство</b>
+            <span>Ваша история чата и список задач — только ваши. Вход по email и паролю.</span>
+          </div>
+          <div class="upsell-perk">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.2 2.2m8.4 8.4 2.2 2.2m0-12.8-2.2 2.2M7.8 16.2l-2.2 2.2"/></svg>
+            <b>Чат с ассистентом</b>
+            <span>Общайтесь с TaskMind прямо на сайте: планирование, советы, задачи по шагам.</span>
+          </div>
+          <div class="upsell-perk">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 3 2 2 4-4"/><path d="M13 7h8M13 17h8"/><rect x="3" y="15" width="6" height="6" rx="1"/></svg>
+            <b>Всё сохраняется</b>
+            <span>Задачи доступны после перезагрузки браузера — аккаунт помнит ваш список.</span>
+          </div>
+        </div>
+        <div class="upsell-actions">
+          <button class="btn btn-primary btn-lg" id="btn-upsell-auth" type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>
+            Создать аккаунт бесплатно
+          </button>
+          <small>Без карты и подписки · 30 секунд</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="sec" id="features">
+    <div class="container">
+      <div class="sec-head">
+        <h2>Возможности бота</h2>
+        <p>Всё, что нужно, чтобы ничего не забыть и успевать больше — прямо в привычном мессенджере.</p>
+      </div>
+      <div class="features-grid" id="features-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="sec how">
+    <div class="container">
+      <div class="sec-head">
+        <h2>Как это работает</h2>
+        <p>Три шага — и все ваши дела под надёжным контролем.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-ic">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+            <span class="step-num">1</span>
+          </div>
+          <h3>Добавьте бота</h3>
+          <p>Найдите @taskmind_bot в Telegram и нажмите «Запустить». Это займёт 10 секунд.</p>
+        </div>
+        <div class="step">
+          <div class="step-ic">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+            <span class="step-num">2</span>
+          </div>
+          <h3>Пишите задачи словами</h3>
+          <p>«Оплатить интернет послезавтра» или «Созвон завтра в 11:30 !важно» — бот всё структурирует сам.</p>
+          <span class="step-sample">Созвон завтра в 11:30 !важно #работа</span>
+        </div>
+        <div class="step">
+          <div class="step-ic">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="step-num">3</span>
+          </div>
+          <h3>Получайте напоминания</h3>
+          <p>В назначенное время бот пришлёт уведомление. Забыть что-то важное больше не получится.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATS ============ -->
+  <section style="padding:24px 0">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat"><b>24/7</b><span>бот всегда на связи</span></div>
+        <div class="stat"><b>&lt; 1 сек</b><span>ответ на команду</span></div>
+        <div class="stat"><b>3 сек</b><span>чтобы добавить задачу</span></div>
+        <div class="stat"><b>0 ₽</b><span>базовые функции навсегда</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMMANDS ============ -->
+  <section class="sec" id="commands">
+    <div class="container">
+      <div class="sec-head">
+        <h2>Команды бота</h2>
+        <p>Короткие команды для быстрой навигации — а всё остальное можно просто писать словами.</p>
+      </div>
+      <div class="cmd-grid" id="cmd-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="sec" id="faq">
+    <div class="container">
+      <div class="sec-head">
+        <h2>Частые вопросы</h2>
+        <p>Не нашли ответ? Напишите /help в боте или спросите напрямую.</p>
+      </div>
+      <div class="faq" id="faq-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section style="padding:16px 0 88px">
+    <div class="container">
+      <div class="cta-card">
+        <h2>Начните за 30 секунд</h2>
+        <p>Откройте бота, нажмите «Запустить» — и уже сегодня все ваши дела будут под контролем. Никаких приложений и регистраций.</p>
+        <div class="cta-actions">
+          <a class="btn btn-primary btn-lg" href="https://t.me/taskmind_bot" target="_blank" rel="noreferrer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            Открыть @taskmind_bot
+          </a>
+          <button class="btn btn-ghost btn-lg" id="btn-cta-auth" type="button">Создать аккаунт на сайте</button>
+        </div>
+        <p class="cta-note">Бесплатно · В Telegram и прямо на сайте</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="mini-logo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </span>
+      <b>TaskMind</b>
+      <span>© 2026 · демо-сайт Telegram-бота</span>
+    </div>
+    <nav class="footer-nav" aria-label="Ссылки в подвале">
+      <a href="https://t.me/taskmind_bot" target="_blank" rel="noreferrer">Telegram</a>
+      <a href="#demo">Демо</a>
+      <a href="#features">Возможности</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </div>
+</footer>
+</div>
+
+<!-- ============ WORKSPACE (после входа в аккаунт) ============ -->
+<div class="ws" id="workspace">
+  <header class="ws-topbar">
+    <div class="container ws-topbar-inner">
+      <span class="brand">
+        <span class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+        TaskMind
+        <span class="brand-badge">web</span>
+      </span>
+      <div class="ws-user">
+        <div class="ws-user-info"><b id="ws-name"></b><span id="ws-email"></span></div>
+        <span class="ws-avatar" id="ws-avatar"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-logout" type="button">Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container ws-main">
+    <div class="ws-greet-row">
+      <div>
+        <h1>Привет, <span id="ws-greet-name"></span>! 👋</h1>
+        <p class="ws-date">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span id="ws-date"></span>
+        </p>
+      </div>
+      <span class="pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        ИИ-ассистент подключён
+      </span>
+    </div>
+
+    <div class="ws-stats">
+      <div class="ws-stat">
+        <div class="ws-stat-top"><span>Всего задач</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 3 2 2 4-4"/><path d="M13 7h8M13 17h8"/><rect x="3" y="15" width="6" height="6" rx="1"/></svg></div>
+        <b id="ws-stat-total">0</b>
+      </div>
+      <div class="ws-stat">
+        <div class="ws-stat-top"><span>Активные</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <b id="ws-stat-active">0</b>
+      </div>
+      <div class="ws-stat">
+        <div class="ws-stat-top"><span>Выполнено</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <b id="ws-stat-done">0</b>
+      </div>
+      <div class="ws-stat">
+        <div class="ws-stat-top"><span>❗️ Важные</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg></div>
+        <b id="ws-stat-high">0</b>
+      </div>
+    </div>
+
+    <div class="ws-grid">
+      <!-- чат с ИИ -->
+      <div class="card chat-card">
+        <div class="chat-head" style="padding:14px 16px">
+          <span class="avatar" style="width:40px;height:40px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg>
+          </span>
+          <div style="flex:1;min-width:0">
+            <div class="chat-head-name" style="display:flex;align-items:center;gap:8px">TaskMind AI <span class="brand-badge">ИИ</span></div>
+            <div class="chat-head-status"><span class="dot"></span>онлайн · отвечает мгновенно</div>
+          </div>
+          <button class="ws-chat-head-btn" id="ws-clear-chat" type="button" aria-label="Очистить историю чата" title="Очистить историю чата">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+          </button>
+        </div>
+        <div class="chat-body scroll-thin" id="ws-messages" aria-live="polite"></div>
+        <div class="chat-foot">
+          <div class="chips scroll-thin" id="ws-chips"></div>
+          <form class="chat-form" id="ws-form">
+            <input type="text" id="ws-input" placeholder="Напишите задачу или спросите ИИ…" aria-label="Сообщение TaskMind AI" autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-icon" aria-label="Отправить">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- задачи -->
+      <div class="card tasks-card">
+        <div class="tasks-head">
+          <h3 class="tasks-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal)"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 3 2 2 4-4"/><path d="M13 7h8M13 17h8"/><rect x="3" y="15" width="6" height="6" rx="1"/></svg>
+            Мои задачи
+            <span class="count-badge" id="ws-count-badge">0</span>
+          </h3>
+          <button class="clear-btn" id="ws-clear-done" style="display:none" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-4 7 4 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z"/><path d="M3 5v14"/></svg>
+            Убрать выполненные
+          </button>
+        </div>
+        <form class="quick-add" id="ws-task-form">
+          <input type="text" id="ws-task-input" placeholder="Новая задача — «завтра в 9:00»" aria-label="Новая задача" autocomplete="off">
+          <button type="submit" class="btn btn-primary btn-icon" aria-label="Добавить задачу">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
+          </button>
+        </form>
+        <div class="progress-row" id="ws-progress-row" style="display:none;margin-top:16px">
+          <div class="progress-labels"><span id="ws-progress-text">Выполнено 0 из 0</span><span id="ws-progress-pct">0%</span></div>
+          <div class="progress"><div class="progress-fill" id="ws-progress-fill"></div></div>
+        </div>
+        <div class="task-list scroll-thin" id="ws-task-list"></div>
+        <button class="btn btn-outline-teal" id="ws-reminder" style="margin-top:16px;width:100%" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Проверить напоминание
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ АВТОРИЗАЦИЯ ============ -->
+<div class="auth-overlay" id="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+  <div class="auth-dialog">
+    <div class="auth-brand">
+      <span class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </span>
+      TaskMind
+    </div>
+    <h2 class="auth-title" id="auth-title">Создать аккаунт</h2>
+    <p class="auth-desc" id="auth-desc">Бесплатно, без подтверждений — задачи и чат сохранятся в этом браузере.</p>
+    <div class="auth-tabs">
+      <button class="auth-tab" data-mode="login" id="tab-login" type="button">Вход</button>
+      <button class="auth-tab active" data-mode="register" id="tab-register" type="button">Регистрация</button>
+    </div>
+    <form class="auth-form" id="auth-form">
+      <div class="auth-field" id="field-name">
+        <label for="auth-name">Имя (необязательно)</label>
+        <div class="auth-field-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>
+          <input id="auth-name" type="text" placeholder="Как к вам обращаться" autocomplete="name">
+        </div>
+      </div>
+      <div class="auth-field">
+        <label for="auth-email">Email</label>
+        <div class="auth-field-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <input id="auth-email" type="email" required placeholder="you@example.com" autocomplete="email">
+        </div>
+      </div>
+      <div class="auth-field">
+        <label for="auth-password">Пароль</label>
+        <div class="auth-field-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <input id="auth-password" type="password" required minlength="6" placeholder="Минимум 6 символов" autocomplete="new-password">
+        </div>
+      </div>
+      <p class="auth-error" id="auth-error" role="alert"></p>
+      <button class="btn btn-primary" id="auth-submit" type="submit">Создать аккаунт</button>
+      <p class="auth-note">Регистрируясь, вы соглашаетесь, что это демо-проект TaskMind 🙂</p>
+    </form>
+  </div>
+</div>
+
+<!-- всплывающее уведомление -->
+<div class="ws-toast" id="ws-toast" role="status"><b id="ws-toast-title"></b><span id="ws-toast-text"></span></div>
+
+<script>
+/* =====================================================================
+   TaskMind — интерактивное демо (нативный JS, без зависимостей)
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  var STORE_KEY = 'taskmind-demo-v1';
+
+  var GREETING = '👋 Привет! Я TaskMind — ваш умный список задач.\n' +
+    'Просто напишите задачу обычными словами, например:\n' +
+    '«Купить хлеб завтра в 18:00» — я сам разберу время.';
+
+  var GREETING_SHORT = 'Привет! 👋 Напишите новую задачу или /help — покажу, что я умею.';
+
+  var HELP = 'Чем я могу помочь:\n' +
+    '• Напишите задачу словами: «Оплатить интернет послезавтра»\n' +
+    '• ❗️ !важно — приоритет · 🏷 #тег — категория\n' +
+    '• Время: «завтра в 18:00», «через 2 часа», «в пятницу», «каждый день»\n' +
+    '• Команды: /list · /today · /stats · /clear';
+
+  var SUGGESTIONS = [
+    'Купить хлеб завтра в 18:00 #дом',
+    'Созвон с командой завтра в 11:30 !важно #работа',
+    'Тренировка каждый день в 8:00',
+    'Оплатить интернет послезавтра',
+    'Встреча с клиентом в пятницу в 15:00',
+    'Отчёт через 2 часа'
+  ];
+
+  var FEATURES = [
+    ['Понимает обычную речь', 'Напишите «Купить хлеб завтра в 18:00» — бот сам определит текст, дату и время. Никаких сложных форм и меню.',
+      '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m4 11 4-7h8l4 7M8 20h8"/><path d="M4 11h16"/>'],
+    ['Точные напоминания', 'Пришлёт уведомление вовремя, повторит через 15 минут и позволит отложить напоминание одним нажатием кнопки.',
+      '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'],
+    ['Повторяющиеся задачи', 'Ежедневные, еженедельные и ежемесячные дела — тренировки, оплаты, отчёты — создаются один раз.',
+      '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'],
+    ['Приоритеты и теги', 'Отмечайте важное («!важно») и группируйте задачи по категориям («#работа», «#дом»), чтобы быстро фильтровать список.',
+      '<path d="M12 2h7a1 1 0 0 1 1 1v7l-9.3 9.3a1 1 0 0 1-1.4 0l-6.6-6.6a1 1 0 0 1 0-1.4Z"/><circle cx="16" cy="7" r="1"/>'],
+    ['Статистика продуктивности', 'Сколько задач выполнено, что запланировано на сегодня и что требует внимания — команда /stats покажет всё.',
+      '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/>'],
+    ['Совместные списки', 'Добавьте бота в групповой чат — общий список покупок с семьёй или командный чек-лист всегда под рукой.',
+      '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>']
+  ];
+
+  var COMMANDS = [
+    ['/start', 'Запустить бота и получить приветствие'],
+    ['/add', 'Добавить задачу (или просто напишите её текстом)'],
+    ['/list', 'Показать все активные задачи'],
+    ['/today', 'Задачи, запланированные на сегодня'],
+    ['/done', 'Отметить задачу выполненной'],
+    ['/remind', 'Настроить или перенести напоминание'],
+    ['/stats', 'Статистика продуктивности'],
+    ['/tz', 'Настроить часовой пояс для напоминаний'],
+    ['/clear', 'Удалить выполненные и очищенные задачи'],
+    ['/help', 'Справка и примеры запросов']
+  ];
+
+  var FAQ = [
+    ['Сколько стоит бот?', 'Базовые функции бесплатны и всегда будут такими: добавление задач, напоминания, списки, теги и статистика. Платная подписка добавляет расширенные правила повторов, напоминания по местоположению и приоритетную поддержку.'],
+    ['Мои данные в безопасности?', 'Да. Бот хранит только тексты задач и время напоминаний, не передаёт их третьим лицам и не использует для рекламы. В любой момент можно удалить все свои данные командой /clear.'],
+    ['На каких устройствах работает бот?', 'Везде, где установлен Telegram: на смартфонах, планшетах, компьютерах и даже умных часах. Список задач синхронизируется между устройствами автоматически.'],
+    ['Что будет, если не указать время?', 'Задача всё равно сохранится в списке — просто без напоминания. Бот подскажет об этом и предложит добавить время позже, например «завтра в 18:00».'],
+    ['Можно ли использовать бота в группе?', 'Да! Добавьте бота в групповой чат — общий список покупок для семьи или чек-лист релиза для команды будут доступны всем участникам. Каждый сможет добавлять задачи и отмечать выполненные.'],
+    ['Как редактировать или удалять задачи?', 'Команда /done отмечает задачу выполненной, /remind переносит напоминание, а /clear удаляет выполненные задачи. Также можно написать «готово 1», чтобы выполнить первую задачу из списка.']
+  ];
+
+  var MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  var WEEKDAYS_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  var WD_STEMS = [[/понедельни/,1],[/вторник/,2],[/сред/,3],[/четвер/,4],[/пятниц/,5],[/суббот/,6],[/воскресень/,0]];
+  var MONTH_STEMS = [['январ',0],['феврал',1],['март',2],['апрел',3],['ма',4],['июн',5],['июл',6],['август',7],['сентябр',8],['октябр',9],['ноябр',10],['декабр',11]];
+
+  var tasks = [];
+  var messages = [];
+  var typing = false;
+
+  function $(id) { return document.getElementById(id); }
+  function uid() {
+    return (crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+  function nowTime() {
+    var d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function isSameDay(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+  function boundary(word) {
+    return new RegExp('(?<![a-zа-яё\\d])' + word + '(?![a-zа-яё\\d])', 'i');
+  }
+  function fmtTime(d) {
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function formatDue(d) {
+    var now = new Date();
+    var diff = Math.round((startOfDay(d) - startOfDay(now)) / 86400000);
+    var t = fmtTime(d);
+    if (diff === 0) return 'сегодня, ' + t;
+    if (diff === 1) return 'завтра, ' + t;
+    if (diff === 2) return 'послезавтра, ' + t;
+    if (diff > 2 && diff < 7) return capitalize(WEEKDAYS_RU[d.getDay()]) + ', ' + t;
+    return d.getDate() + ' ' + MONTHS_RU[d.getMonth()] + ', ' + t;
+  }
+
+  /* ---------------- парсер естественного языка ---------------- */
+
+  function adjustPartOfDay(h, pod) {
+    pod = (pod || '').toLowerCase();
+    if (pod === 'вечера' || pod === 'дня') return h < 12 ? h + 12 : h;
+    if (pod === 'утра') return h === 12 ? 0 : h;
+    if (pod === 'ночи') {
+      if (h === 12) return 0;
+      if (h >= 7 && h < 12) return h + 12;
+      return h;
+    }
+    return h;
+  }
+
+  function extractTime(text) {
+    var withPrep = text.match(/(?:^|[\s,])(?:в|к|на)\s+(\d{1,2})(?::(\d{2}))?(?!\d)\s*(?:час(?:ов|а)?)?\s*(утра|дня|вечера|ночи)?(?=$|[\s,.;:!?])/i);
+    if (withPrep) {
+      var h = adjustPartOfDay(parseInt(withPrep[1], 10), withPrep[4] || '');
+      var m = withPrep[2] ? parseInt(withPrep[2], 10) : 0;
+      if (h > 23 || m > 59) return null;
+      return { h: h, m: m, matched: withPrep[0] };
+    }
+    var colon = text.match(/(?:^|[\s,])(\d{1,2}):(\d{2})(?!\d)(?=$|[\s,.;:!?])/);
+    if (colon) {
+      var h2 = parseInt(colon[1], 10), m2 = parseInt(colon[2], 10);
+      if (h2 > 23 || m2 > 59) return null;
+      return { h: h2, m: m2, matched: colon[0] };
+    }
+    return null;
+  }
+
+  function nextWeekday(base, target) {
+    var d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    var diff = (target - d.getDay() + 7) % 7;
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  function cleanTitle(text) {
+    var t = text.replace(/\s+/g, ' ').trim();
+    t = t.replace(/^[\s,.;:!?\-–—]+/, '');
+    t = t.replace(/[\s,.;:!?\-–—]+$/, '');
+    t = t.replace(/^(?:напомни(?:ть)?|напоминание)\s+(?:мне\s+)?(?:пожалуйста\s+)?/i, '');
+    t = t.replace(/^(?:добав(?:ь|ить|и)|постав(?:ь|ить)?|созда(?:й|ть)?|создай)\s+(?:новую\s+)?(?:задачу\s+|задач[аи]\s+)?(?:пожалуйста\s+)?/i, '');
+    t = t.replace(/^(?:мне|пожалуйста|плиз)[,\s]+/i, '');
+    t = t.replace(/^(?:в|во|к|на|о|об|про)\s+(?=[а-яёa-z])/i, '');
+    t = t.replace(/^(?:[а-яё])\s+(?=[а-яёa-z])/i, '');
+    t = t.replace(/\s+пожалуйста\s*$/i, '');
+    t = t.replace(/[\s,.;:!?]+$/, '').trim();
+    return t ? capitalize(t.charAt(0)) + t.slice(1) : '';
+  }
+
+  function parseTask(raw) {
+    var now = new Date();
+    var text = ' ' + raw.replace(/\s+/g, ' ').trim() + ' ';
+    var tags = [];
+    var priority = 'normal';
+    var repeat = 'none';
+    var weeklyDay = null;
+
+    // 1. Теги
+    text = text.replace(/#[\wа-яё-]+/gi, function (m) {
+      var t = m.slice(1);
+      if (t && tags.indexOf(t.toLowerCase()) === -1) tags.push(t.toLowerCase());
+      return ' ';
+    });
+
+    // 2. Приоритет
+    if (/!{2,}|!важн|!срочн|!высок|!1(?![\wа-яё])/i.test(text)) priority = 'high';
+    else if (/!неважн|!низк|!3(?![\wа-яё])/i.test(text)) priority = 'low';
+    text = text.replace(/!+[\wа-яё]*/gi, ' ');
+
+    // 3. Повторы
+    var repMatch = text.match(/кажд(?:ый|ую|ое|ые)\s+(?:день|неделю|месяц|понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|ежедневно|еженедельно|ежемесячно|по\s+(?:будням|выходным|понедельникам|вторникам|средам|четвергам|пятницам|субботам|воскресеньям)/i);
+    if (repMatch) {
+      var s = repMatch[0].toLowerCase();
+      var wd = s.match(/понедельни|вторник|сред|четвер|пятниц|суббот|воскресень/);
+      if (wd) {
+        repeat = 'weekly';
+        for (var i = 0; i < WD_STEMS.length; i++) if (WD_STEMS[i][0].test(wd[0])) weeklyDay = WD_STEMS[i][1];
+      } else if (/недел|еженедельно|выходным/.test(s)) repeat = 'weekly';
+      else if (/месяц|ежемесячно/.test(s)) repeat = 'monthly';
+      else repeat = 'daily';
+      text = text.replace(repMatch[0], ' ');
+    }
+
+    // 4. Относительное время
+    var due = null;
+    var rel = text.match(/через\s+(\d+)?\s*(мин(?:ут[а-яё]*)?|ч(?:ас[а-яё]*|\.?)|дн(?:я|ей|ю)?|день|недел[а-яё]*)/i);
+    if (rel) {
+      var n = rel[1] ? parseInt(rel[1], 10) : 1;
+      var u = rel[2].toLowerCase();
+      var mins;
+      if (u.indexOf('мин') === 0) mins = n;
+      else if (u.indexOf('ч') === 0) mins = n * 60;
+      else if (u.indexOf('недел') === 0) mins = n * 7 * 24 * 60;
+      else mins = n * 24 * 60;
+      due = new Date(now.getTime() + mins * 60000);
+      text = text.replace(rel[0], ' ');
+    }
+
+    // 5. День недели
+    var weekdayBase = null;
+    if (!due) {
+      var wd2 = text.match(/(?:^|\s)(?:в|во|по)\s+(понедельни[а-яё]*|вторни[а-яё]*|сред[а-яё]*|четвер[а-яё]*|пятниц[а-яё]*|суббот[а-яё]*|воскресень[а-яё]*)/i);
+      if (wd2) {
+        var w = wd2[1].toLowerCase();
+        for (var j = 0; j < WD_STEMS.length; j++) {
+          if (WD_STEMS[j][0].test(w)) {
+            weekdayBase = nextWeekday(now, WD_STEMS[j][1]);
+            if (weeklyDay !== null && weeklyDay !== WD_STEMS[j][1]) weeklyDay = WD_STEMS[j][1];
+            text = text.replace(wd2[0], ' ');
+            break;
+          }
+        }
+      }
+    }
+
+    // 6. Сегодня / завтра / послезавтра
+    var dayBase = null;
+    if (!due && !weekdayBase) {
+      if (boundary('послезавтра').test(text)) { dayBase = addDays(now, 2); text = text.replace(boundary('послезавтра'), ' '); }
+      else if (boundary('завтра').test(text)) { dayBase = addDays(now, 1); text = text.replace(boundary('завтра'), ' '); }
+      else if (boundary('сегодня').test(text)) { dayBase = new Date(now.getFullYear(), now.getMonth(), now.getDate()); text = text.replace(boundary('сегодня'), ' '); }
+    }
+
+    // 7. Календарная дата: 25.12 или 25 декабря
+    var dateBase = null;
+    if (!due && !weekdayBase && !dayBase) {
+      var dmw = text.match(/(?<!\d)(\d{1,2})\s+(январ[а-яё]*|феврал[а-яё]*|март[а-яё]*|апрел[а-яё]*|ма[йя][а-яё]*|июн[а-яё]*|июл[а-яё]*|август[а-яё]*|сентябр[а-яё]*|октябр[а-яё]*|ноябр[а-яё]*|декабр[а-яё]*)(?![а-яё])/i);
+      var dm = null;
+      if (dmw) {
+        var day = parseInt(dmw[1], 10);
+        var stem = dmw[2].toLowerCase();
+        var month = null;
+        for (var k = 0; k < MONTH_STEMS.length; k++) {
+          if (stem.indexOf(MONTH_STEMS[k][0]) === 0) { month = MONTH_STEMS[k][1]; break; }
+        }
+        if (month !== null && day >= 1 && day <= 31) {
+          var cand = new Date(now.getFullYear(), month, day);
+          if (startOfDay(cand) < startOfDay(now)) cand.setFullYear(cand.getFullYear() + 1);
+          dateBase = cand;
+          text = text.replace(dmw[0], ' ');
+        }
+      } else if ((dm = text.match(/(?<![\d.])(\d{1,2})[.\-/](\d{1,2})(?![\d.])/))) {
+        var d2 = parseInt(dm[1], 10), mo = parseInt(dm[2], 10) - 1;
+        if (d2 >= 1 && d2 <= 31 && mo >= 0 && mo <= 11) {
+          var cand2 = new Date(now.getFullYear(), mo, d2);
+          if (startOfDay(cand2) < startOfDay(now)) cand2.setFullYear(cand2.getFullYear() + 1);
+          dateBase = cand2;
+          text = text.replace(dm[0], ' ');
+        }
+      }
+    }
+
+    // 8. Время
+    var time = extractTime(text);
+    if (time) text = text.replace(time.matched, ' ');
+
+    if (!due) {
+      var base = dateBase || weekdayBase || dayBase;
+      if (base) {
+        due = new Date(base);
+        if (time) due.setHours(time.h, time.m, 0, 0);
+        else due.setHours(9, 0, 0, 0);
+        if (due.getTime() <= now.getTime()) {
+          due = (weekdayBase && isSameDay(due, now)) ? addDays(due, 7) : addDays(due, 1);
+        }
+      } else if (time) {
+        due = new Date(now);
+        due.setHours(time.h, time.m, 0, 0);
+        if (due.getTime() <= now.getTime()) due = addDays(due, 1);
+      }
+    }
+
+    return { title: cleanTitle(text), due: due, priority: priority, tags: tags, repeat: repeat };
+  }
+
+  function taskFromParsed(p) {
+    return {
+      id: uid(), title: p.title || 'Задача',
+      dueISO: p.due ? p.due.toISOString() : null,
+      priority: p.priority, tags: p.tags, repeat: p.repeat,
+      done: false, createdAt: Date.now()
+    };
+  }
+
+  function sortTasks(list) {
+    var pending = list.filter(function (t) { return !t.done; }).sort(function (a, b) {
+      if (a.dueISO && b.dueISO) return new Date(a.dueISO) - new Date(b.dueISO);
+      if (a.dueISO) return -1;
+      if (b.dueISO) return 1;
+      return b.createdAt - a.createdAt;
+    });
+    var done = list.filter(function (t) { return t.done; }).sort(function (a, b) { return b.createdAt - a.createdAt; });
+    return pending.concat(done);
+  }
+
+  function repeatLabel(r) {
+    return { daily: 'каждый день', weekly: 'каждую неделю', monthly: 'каждый месяц' }[r] || '';
+  }
+
+  function confirmation(t) {
+    var lines = ['✅ Задача добавлена!', '📋 «' + t.title + '»'];
+    if (t.dueISO) lines.push('⏰ Напомню: ' + formatDue(new Date(t.dueISO)));
+    else lines.push('💬 Без напоминания. Напишите время — например, «завтра в 18:00».');
+    if (t.repeat !== 'none') lines.push('🔁 Повтор: ' + repeatLabel(t.repeat));
+    if (t.priority === 'high') lines.push('❗️ Приоритет: высокий');
+    if (t.priority === 'low') lines.push('⬇️ Приоритет: низкий');
+    if (t.tags.length) lines.push('🏷 Категории: ' + t.tags.map(function (x) { return '#' + x; }).join(' '));
+    return lines.join('\n');
+  }
+
+  /* ---------------- бот: обработка ввода ---------------- */
+
+  function handleUserInput(value) {
+    var cmd = value.trim().toLowerCase().replace(/\s+/g, ' ');
+    var pending = tasks.filter(function (t) { return !t.done; });
+
+    function fmtTask(t) {
+      return '«' + t.title + '»' + (t.dueISO ? ' — ' + formatDue(new Date(t.dueISO)) : '') + (t.priority === 'high' ? ' ❗️' : '');
+    }
+    function listText(list, title) {
+      return list.length
+        ? title + ' (' + list.length + '):\n' + list.map(function (t, i) { return (i + 1) + '. ' + fmtTask(t); }).join('\n')
+        : '🎉 Активных задач нет — можно отдыхать!';
+    }
+
+    if (cmd.indexOf('/start') === 0) return { text: GREETING };
+    if (cmd.indexOf('/help') === 0 || /помощь|что ты умеешь|как пользоваться/.test(cmd)) return { text: HELP };
+    if (cmd.indexOf('/list') === 0 || ['список', 'задачи', 'мои задачи', 'все задачи'].indexOf(cmd) !== -1)
+      return { text: listText(pending, '📋 Активные задачи') };
+    if (cmd.indexOf('/today') === 0 || cmd === 'сегодня' || cmd === 'на сегодня') {
+      var today = pending.filter(function (t) { return t.dueISO && isSameDay(new Date(t.dueISO), new Date()); });
+      return { text: today.length ? listText(today, '☀️ Задачи на сегодня')
+        : '☀️ На сегодня задач нет. Отличный день, чтобы спланировать завтра!' };
+    }
+    if (cmd.indexOf('/stats') === 0 || cmd === 'статистика') {
+      var done = tasks.length - pending.length;
+      var high = pending.filter(function (t) { return t.priority === 'high'; }).length;
+      return { text: '📊 Ваша статистика:\n• Всего задач: ' + tasks.length +
+        '\n• Выполнено: ' + done + '\n• Активных: ' + pending.length +
+        '\n• ❗️ С высоким приоритетом: ' + high };
+    }
+    if (cmd.indexOf('/clear') === 0 || cmd === 'очистить') { tasks = []; renderTasks(); return { text: '🧹 Все задачи удалены. Чистый лист!' }; }
+    if (/^(спасибо|благодарю|thanks|спс)/.test(cmd))
+      return { text: 'Всегда рад помочь! 😊 Если что-то нужно напомнить — просто напишите.' };
+    if (/^(привет|здравствуй|доброе утро|добрый день|добрый вечер|хай|hello|hi)[\s!.,]*$/.test(cmd))
+      return { text: GREETING_SHORT };
+    if (cmd.charAt(0) === '/')
+      return { text: '🤔 Не знаю такую команду. Напишите /help — покажу, что я умею.' };
+
+    var doneMatch = cmd.match(/^(?:готово|done)\s+(\d+)$/);
+    if (doneMatch) {
+      var idx = parseInt(doneMatch[1], 10) - 1;
+      var sortedPending = sortTasks(pending);
+      if (idx >= 0 && idx < sortedPending.length) {
+        var target = sortedPending[idx];
+        tasks = sortTasks(tasks.map(function (t) {
+          return t.id === target.id ? Object.assign({}, t, { done: true }) : t;
+        }));
+        renderTasks();
+        return { text: 'Отлично! «' + target.title + '» выполнена ✅ Так держать! 🎉' };
+      }
+      return { text: 'Нет задачи с таким номером. Напишите /list, чтобы увидеть список.' };
+    }
+
+    var task = taskFromParsed(parseTask(value));
+    tasks = sortTasks([task].concat(tasks));
+    renderTasks();
+    return { text: confirmation(task) };
+  }
+
+  /* ---------------- рендер чата ---------------- */
+
+  var chatBox = $('chat-messages');
+  var typingEl = null;
+
+  function bubbleNode(m) {
+    var wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.justifyContent = m.from === 'user' ? 'flex-end' : 'flex-start';
+    var b = document.createElement('div');
+    b.className = 'bubble ' + (m.from === 'user' ? 'bubble-user' : 'bubble-bot');
+    b.style.whiteSpace = 'pre-line';
+    b.textContent = m.text;
+    if (m.buttons && m.buttons.length) {
+      var row = document.createElement('div');
+      row.className = 'bubble-msg-btns';
+      m.buttons.forEach(function (btn) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.textContent = btn.label;
+        el.addEventListener('click', function () { handleButton(btn.action, btn.taskId, m.id); });
+        row.appendChild(el);
+      });
+      b.appendChild(row);
+    }
+    var time = document.createElement('span');
+    time.className = 'bubble-time';
+    time.textContent = m.time;
+    b.appendChild(time);
+    wrap.appendChild(b);
+    return wrap;
+  }
+
+  function renderMessages() {
+    chatBox.innerHTML = '';
+    messages.forEach(function (m) { chatBox.appendChild(bubbleNode(m)); });
+    if (typing) {
+      typingEl = document.createElement('div');
+      typingEl.style.display = 'flex';
+      typingEl.style.justifyContent = 'flex-start';
+      typingEl.innerHTML = '<div class="bubble bubble-bot"><span class="typing"><i></i><i></i><i></i></span></div>';
+      chatBox.appendChild(typingEl);
+    }
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function scrollBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
+
+  function pushBot(text, buttons) {
+    typing = true;
+    renderMessages();
+    window.setTimeout(function () {
+      typing = false;
+      messages.push({ id: uid(), from: 'bot', text: text, time: nowTime(), buttons: buttons || undefined });
+      renderMessages();
+      renderTasks();
+      persist();
+    }, 550 + Math.random() * 450);
+  }
+
+  function send(raw) {
+    var value = (raw != null ? raw : $('chat-input').value).trim();
+    if (!value || typing) return;
+    messages.push({ id: uid(), from: 'user', text: value, time: nowTime() });
+    $('chat-input').value = '';
+    typing = true;
+    renderMessages();
+    persist();
+    window.setTimeout(function () {
+      var reply = handleUserInput(value);
+      typing = false;
+      messages.push({ id: uid(), from: 'bot', text: reply.text, time: nowTime(), buttons: reply.buttons });
+      renderMessages();
+      renderTasks();
+      persist();
+    }, 650 + Math.random() * 500);
+  }
+
+  function handleButton(action, taskId, msgId) {
+    messages = messages.map(function (m) {
+      return m.id === msgId ? Object.assign({}, m, { buttons: undefined }) : m;
+    });
+    renderMessages();
+    var target = null;
+    for (var i = 0; i < tasks.length; i++) if (tasks[i].id === taskId) target = tasks[i];
+    if (action === 'done') {
+      tasks = sortTasks(tasks.map(function (t) {
+        return t.id === taskId ? Object.assign({}, t, { done: true }) : t;
+      }));
+      renderTasks();
+      pushBot('Отлично! «' + (target ? target.title : 'Задача') + '» выполнена ✅');
+    } else {
+      pushBot('Хорошо, напомню ещё раз через 15 минут 🔔');
+    }
+    persist();
+  }
+
+  function demoReminder() {
+    if (typing) return;
+    var pending = sortTasks(tasks).filter(function (t) { return !t.done; });
+    var target = null;
+    for (var i = 0; i < pending.length; i++) if (pending[i].dueISO) { target = pending[i]; break; }
+    if (!target && pending.length) target = pending[0];
+    if (!target) return;
+    typing = true;
+    renderMessages();
+    window.setTimeout(function () {
+      typing = false;
+      var text = '⏰ Напоминание!\nЧерез 15 минут: «' + target.title + '»' +
+        (target.dueISO ? '\n🕐 ' + formatDue(new Date(target.dueISO)) : '');
+      messages.push({
+        id: uid(), from: 'bot', text: text, time: nowTime(),
+        buttons: [
+          { label: '✅ Готово', action: 'done', taskId: target.id },
+          { label: '⏰ Отложить', action: 'snooze', taskId: target.id }
+        ]
+      });
+      renderMessages();
+      renderTasks();
+      persist();
+    }, 600);
+  }
+
+  /* ---------------- рендер задач ---------------- */
+
+  function metaChip(cls, iconSvg, label) {
+    var s = document.createElement('span');
+    s.className = 'meta-chip ' + cls;
+    s.innerHTML = iconSvg + label;
+    return s;
+  }
+
+  var ICON_CLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  var ICON_FLAG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>';
+  var ICON_REPEAT = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
+  var ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  function taskNode(t) {
+    var row = document.createElement('div');
+    row.className = 'task' + (t.done ? ' done' : '');
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = t.done;
+    cb.setAttribute('aria-label', 'Отметить «' + t.title + '»');
+    cb.addEventListener('change', function () {
+      tasks = sortTasks(tasks.map(function (x) {
+        return x.id === t.id ? Object.assign({}, x, { done: !x.done }) : x;
+      }));
+      renderTasks();
+      persist();
+    });
+    row.appendChild(cb);
+
+    var body = document.createElement('div');
+    body.style.flex = '1';
+    body.style.minWidth = '0';
+
+    var title = document.createElement('p');
+    title.className = 'task-title';
+    title.textContent = t.title;
+    body.appendChild(title);
+
+    var meta = document.createElement('div');
+    meta.className = 'task-meta';
+    if (t.dueISO) meta.appendChild(metaChip('', ICON_CLOCK, formatDue(new Date(t.dueISO))));
+    else {
+      var nd = document.createElement('span');
+      nd.className = 'no-due';
+      nd.textContent = 'без напоминания';
+      meta.appendChild(nd);
+    }
+    if (t.priority === 'high') meta.appendChild(metaChip('meta-high', ICON_FLAG, 'важно'));
+    if (t.priority === 'low') meta.appendChild(metaChip('meta-low', ICON_FLAG, 'низкий'));
+    if (t.repeat !== 'none') meta.appendChild(metaChip('meta-repeat', ICON_REPEAT, repeatLabel(t.repeat)));
+    t.tags.forEach(function (tag) {
+      var s = document.createElement('span');
+      s.className = 'tag';
+      s.textContent = '#' + tag;
+      meta.appendChild(s);
+    });
+    body.appendChild(meta);
+    row.appendChild(body);
+
+    var del = document.createElement('button');
+    del.className = 'task-del';
+    del.setAttribute('aria-label', 'Удалить «' + t.title + '»');
+    del.innerHTML = ICON_TRASH;
+    del.addEventListener('click', function () {
+      tasks = tasks.filter(function (x) { return x.id !== t.id; });
+      renderTasks();
+      persist();
+    });
+    row.appendChild(del);
+    return row;
+  }
+
+  function renderTasks() {
+    var list = $('task-list');
+    list.innerHTML = '';
+    var sorted = sortTasks(tasks);
+    if (!sorted.length) {
+      var empty = document.createElement('div');
+      empty.className = 'tasks-empty';
+      empty.innerHTML = '<div class="big">🗒️</div><p>Пока пусто</p><small>Напишите задачу в чате слева — она появится здесь</small>';
+      list.appendChild(empty);
+    } else {
+      sorted.forEach(function (t) { list.appendChild(taskNode(t)); });
+    }
+    var doneCount = tasks.filter(function (t) { return t.done; }).length;
+    var active = tasks.length - doneCount;
+    $('count-badge').textContent = String(active);
+    var pr = $('progress-row');
+    if (tasks.length) {
+      pr.style.display = 'block';
+      var pct = Math.round(doneCount / tasks.length * 100);
+      $('progress-text').textContent = 'Выполнено ' + doneCount + ' из ' + tasks.length;
+      $('progress-pct').textContent = pct + '%';
+      $('progress-fill').style.width = pct + '%';
+    } else pr.style.display = 'none';
+    $('clear-done').style.display = doneCount ? 'flex' : 'none';
+    $('btn-reminder').disabled = typing || !tasks.some(function (t) { return !t.done; });
+  }
+
+  /* ---------------- хранилище ---------------- */
+
+  function persist() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        tasks: tasks,
+        messages: messages.slice(-60)
+      }));
+    } catch (e) { /* переполнение хранилища — игнорируем */ }
+  }
+
+  function restore() {
+    var restored = false;
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (Array.isArray(data.tasks)) tasks = data.tasks;
+        if (Array.isArray(data.messages) && data.messages.length) {
+          messages = data.messages;
+          restored = true;
+        }
+      }
+    } catch (e) { /* повреждённое состояние — игнорируем */ }
+    if (!restored) messages = [{ id: uid(), from: 'bot', text: GREETING, time: nowTime() }];
+  }
+
+  /* ---------------- статические секции ---------------- */
+
+  function svgIcon(paths, size) {
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+  }
+
+  function renderStatic() {
+    $('chips').innerHTML = '';
+    SUGGESTIONS.forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = s;
+      b.addEventListener('click', function () { send(s); });
+      $('chips').appendChild(b);
+    });
+
+    $('features-grid').innerHTML = FEATURES.map(function (f) {
+      return '<article class="feature"><span class="feature-ic">' + svgIcon(f[2], 22) +
+        '</span><h3>' + f[0] + '</h3><p>' + f[1] + '</p></article>';
+    }).join('');
+
+    $('cmd-grid').innerHTML = COMMANDS.map(function (c) {
+      return '<div class="cmd"><code>' + c[0] + '</code><p>' + c[1] + '</p></div>';
+    }).join('');
+
+    $('faq-list').innerHTML = FAQ.map(function (f) {
+      return '<details><summary>' + f[0] +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>' +
+        '</summary><p class="faq-a">' + f[1] + '</p></details>';
+    }).join('');
+  }
+
+  /* ============ аккаунты и рабочее пространство ============ */
+
+  var USERS_KEY = 'taskmind-users-v1';
+  var SESSION_KEY = 'taskmind-session-v1';
+  var WS_PREFIX = 'taskmind-account-';
+
+  var currentUser = null;
+  var wsTasks = [], wsMessages = [], wsTyping = false;
+
+  var GREETING_WS = '👋 Привет! Я TaskMind — теперь и на сайте.\n' +
+    'Напишите задачу обычными словами («Купить хлеб завтра в 18:00») — я сохраню её в вашем аккаунте.\n' +
+    'А ещё можете просто поболтать или спросить совет — я настоящий ИИ 🙂';
+
+  var WS_SUGGESTIONS = [
+    'Купить хлеб завтра в 18:00 #дом',
+    'Что у меня на сегодня?',
+    'Отчёт через 2 часа !важно',
+    'Составь план на день',
+    'Помоги разбить большую задачу на шаги',
+    'Как не забывать о важных делах?'
+  ];
+
+  /* глаголы-маркеры задачи и вопросы-«не задачи» — как в chat-brain.ts */
+  var TASK_VERBS = /(напомни|напоминан|добав|постав|созда|запиши|записать|купи|купить|оплати|оплатить|заплати|заплатить|позвони|позвонить|напиши|написать|отправь|отправить|встреч|созвон|сделать|сделай|прочита|заказ|тренировк|уборк|отчёт|отчет|собеседован|забрать|забери|проверить|проверь|подготов|полить|выехать|вынести|забронир|посетить|сдать|позвон)/i;
+  var NOT_TASK = /(^\s*(как|что|где|когда|почему|зачем|сколько|кто|какой|какая|какие|можешь|можете|умеешь|умеете|расскажи|объясни|подскажи|посоветуй|скажи|привет|здравствуй|спасибо|благодарю|хай|hello|hi|помоги|помогите)\b)|(\?\s*$)/i;
+
+  function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+
+  function sha256Hex(str) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    });
+  }
+
+  async function hashPassword(password, salt) {
+    salt = salt || (uid() + '-' + uid()).replace(/[^a-z0-9]/gi, '').slice(0, 24);
+    if (crypto && crypto.subtle) return salt + ':' + await sha256Hex(salt + ':' + password);
+    /* резервный вариант без WebCrypto (незащищённый контекст) */
+    var x = 5381, y = 52711;
+    for (var i = 0; i < password.length; i++) {
+      var c = password.charCodeAt(i);
+      x = ((x << 5) + x + c) >>> 0; y = ((y << 7) + y + c * 31) >>> 0;
+    }
+    return salt + ':fb' + x.toString(16) + y.toString(16);
+  }
+
+  function getUsers() {
+    try { var a = JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function saveUsers(list) { try { localStorage.setItem(USERS_KEY, JSON.stringify(list)); } catch (e) {} }
+  function publicUser(u) { return { id: u.id, email: u.email, name: u.name || null }; }
+
+  async function registerUser(name, email, password) {
+    email = email.trim().toLowerCase();
+    if (!isValidEmail(email)) return { error: 'Введите корректный email — например, you@example.com' };
+    if (password.length < 6) return { error: 'Пароль должен быть не короче 6 символов' };
+    var users = getUsers();
+    for (var i = 0; i < users.length; i++)
+      if (users[i].email === email) return { error: 'Аккаунт с таким email уже существует — переключитесь на вкладку «Вход»' };
+    var user = { id: uid(), email: email, name: (name || '').trim() || null, pass: await hashPassword(password), createdAt: Date.now() };
+    users.push(user); saveUsers(users);
+    return { user: publicUser(user) };
+  }
+
+  async function loginUser(email, password) {
+    email = email.trim().toLowerCase();
+    var users = getUsers(), found = null;
+    for (var i = 0; i < users.length; i++) if (users[i].email === email) { found = users[i]; break; }
+    if (!found) return { error: 'Аккаунт с таким email не найден — зарегистрируйтесь' };
+    var stored = found.pass.split(':');
+    var check = await hashPassword(password, stored[0]);
+    if (check !== found.pass) return { error: 'Неверный пароль' };
+    return { user: publicUser(found) };
+  }
+
+  function setSession(u) {
+    currentUser = u || null;
+    try {
+      if (u) localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      else localStorage.removeItem(SESSION_KEY);
+    } catch (e) {}
+  }
+  function restoreSession() {
+    try {
+      var r = localStorage.getItem(SESSION_KEY);
+      if (!r) return null;
+      var u = JSON.parse(r);
+      return (u && u.email) ? u : null;
+    } catch (e) { return null; }
+  }
+
+  /* ---- данные аккаунта (задачи и чат) ---- */
+
+  function wsKey() { return WS_PREFIX + currentUser.email; }
+
+  function loadWsData() {
+    wsTasks = []; wsMessages = [];
+    var restored = false;
+    try {
+      var raw = localStorage.getItem(wsKey());
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (Array.isArray(d.tasks)) wsTasks = d.tasks;
+        if (Array.isArray(d.messages) && d.messages.length) { wsMessages = d.messages; restored = true; }
+      }
+    } catch (e) {}
+    if (!restored) wsMessages = [{ id: uid(), from: 'bot', text: GREETING_WS, time: nowTime() }];
+    wsRenderMessages(); wsRenderTasks();
+  }
+  function persistWs() {
+    try { localStorage.setItem(wsKey(), JSON.stringify({ tasks: wsTasks, messages: wsMessages.slice(-60) })); } catch (e) {}
+  }
+
+  /* ---- «мозг» чата: команды, задачи, ответы ассистента ---- */
+
+  function wsListText(list, title) {
+    var sorted = sortTasks(list);
+    return list.length
+      ? title + ' (' + list.length + '):\n' + sorted.map(function (t, i) {
+          return (i + 1) + '. «' + t.title + '»' + (t.dueISO ? ' — ' + formatDue(new Date(t.dueISO)) : '') + (t.priority === 'high' ? ' ❗️' : '');
+        }).join('\n')
+      : '🎉 Активных задач нет — можно отдыхать!';
+  }
+
+  function wsAiReply(value) {
+    var v = value.toLowerCase().replace(/\s+/g, ' ');
+    var pending = sortTasks(wsTasks).filter(function (t) { return !t.done; });
+
+    if (/план|распорядок|спланиру/.test(v)) {
+      if (pending.length) {
+        var lines = pending.slice(0, 6).map(function (t, i) {
+          return (i + 1) + '. ' + (t.dueISO ? fmtTime(new Date(t.dueISO)) + ' — ' : '') + t.title + (t.priority === 'high' ? ' ❗️' : '');
+        });
+        return { text: 'Вот план по вашим задачам:\n' + lines.join('\n') + '\n\nСовет: начните с задачи с ❗️ — пока есть силы. Могу напомнить о любой из них 🙂', ai: true };
+      }
+      return { text: 'Пока задач нет — вот каркас дня, от которого легко оттолкнуться:\n1. 9:00 — самая сложная задача (голова ещё свежая)\n2. 12:00 — короткие дела и ответы на сообщения\n3. 15:00 — встреча или созвон\n4. 18:00 — итоги дня и план на завтра\n\nНапишите ваши задачи с временем — соберу из них план 🙂', ai: true };
+    }
+    if (/разбить|разделить|на шаги|на этапы|шаги/.test(v)) {
+      return { text: 'Большая задача — это обычно 4–5 маленьких. Разбираем так:\n1. Запишите, что считается «готово»\n2. Выделите шаги по 20–40 минут\n3. Первый шаг сделайте сразу — хотя бы 5 минут\n4. Остальные шаги напишите мне с временем, например «шаг 1 завтра в 10:00»\n\nМожете скинуть саму задачу — предложу шаги конкретно под неё 🙂', ai: true };
+    }
+    if (/не забывать|забыва|совет|продуктивн|фокус|тайм-?менедж|мотивац/.test(v)) {
+      return { text: 'Три приёма, которые правда работают:\n• Правило двух минут — если дело занимает меньше двух минут, делайте сразу\n• Один главный приоритет на день — остальное фон\n• Напоминание на 15 минут раньше срока — время собраться и закрыть вопрос\n\nНапишите задачу с временем — и я обязательно напомню вовремя 🙂', ai: true };
+    }
+    if (/что (у меня|мне) (на )?завтра|задачи на завтра/.test(v)) {
+      var tomorrow = pending.filter(function (t) { return t.dueISO && isSameDay(new Date(t.dueISO), addDays(new Date(), 1)); });
+      return { text: tomorrow.length ? '📅 Задачи на завтра (' + tomorrow.length + '):\n' + tomorrow.map(function (t, i) { return (i + 1) + '. «' + t.title + '» — ' + formatDue(new Date(t.dueISO)); }).join('\n') : '📅 На завтра задач пока нет. Отличный вечер, чтобы спланировать день!', ai: true };
+    }
+    if (/\?$/.test(v) || /^(как|что|где|когда|почему|зачем|сколько|кто|какой|какая|какие|можешь|можете|расскажи|объясни|подскажи|посоветуй)/.test(v)) {
+      return { text: 'Я на связи и готов помочь! 🙂 Могу:\n• записать задачу — просто напишите её с временем («созвон завтра в 12:00»)\n• показать список — /list или «что у меня на сегодня»\n• составить план дня или разбить большую задачу на шаги\n\nЧто попробуем?', ai: true };
+    }
+    return { text: 'Понял вас 🙂 Если это задача — допишите время, например «завтра в 18:00», и я сохраню её с напоминанием. Или спросите что-нибудь ещё — я рядом.', ai: true };
+  }
+
+  function wsProcess(value) {
+    var cmd = value.trim().toLowerCase().replace(/\s+/g, ' ');
+    var pending = wsTasks.filter(function (t) { return !t.done; });
+
+    if (cmd.indexOf('/start') === 0) return { text: GREETING_WS };
+    if (cmd.indexOf('/help') === 0 || /помощь|что ты умеешь|как пользоваться/.test(cmd))
+      return { text: HELP + '\n• Или просто спросите меня о чём угодно — я рядом 🙂' };
+    if (cmd.indexOf('/list') === 0 || ['список', 'задачи', 'мои задачи', 'все задачи'].indexOf(cmd) !== -1)
+      return { text: wsListText(pending, '📋 Активные задачи') };
+    if (cmd.indexOf('/today') === 0 || cmd === 'сегодня' || cmd === 'на сегодня') {
+      var today = pending.filter(function (t) { return t.dueISO && isSameDay(new Date(t.dueISO), new Date()); });
+      return { text: today.length ? wsListText(today, '☀️ Задачи на сегодня')
+        : '☀️ На сегодня задач нет. Отличный день, чтобы спланировать завтра!' };
+    }
+    if (cmd.indexOf('/stats') === 0 || cmd === 'статистика') {
+      var done = wsTasks.length - pending.length;
+      var high = pending.filter(function (t) { return t.priority === 'high'; }).length;
+      return { text: '📊 Ваша статистика:\n• Всего задач: ' + wsTasks.length +
+        '\n• Выполнено: ' + done + '\n• Активных: ' + pending.length +
+        '\n• ❗️ С высоким приоритетом: ' + high };
+    }
+    if (cmd.indexOf('/clear') === 0 || cmd === 'очистить') {
+      wsTasks = []; wsRenderTasks(); return { text: '🧹 Все задачи удалены. Чистый лист!' };
+    }
+    if (/^(спасибо|благодарю|thanks|спс)/.test(cmd))
+      return { text: 'Всегда рад помочь! 😊 Если что-то нужно напомнить — просто напишите.' };
+    if (/^(привет|здравствуй|доброе утро|добрый день|добрый вечер|хай|hello|hi)[\s!.,]*$/.test(cmd))
+      return { text: 'Привет! 👋 Напишите новую задачу или /help — покажу, что я умею.' };
+    if (cmd.charAt(0) === '/')
+      return { text: '🤔 Не знаю такую команду. Напишите /help — покажу, что я умею.' };
+
+    var doneMatch = cmd.match(/^(?:готово|done)\s+(\d+)$/);
+    if (doneMatch) {
+      var idx = parseInt(doneMatch[1], 10) - 1;
+      var sortedPending = sortTasks(pending);
+      if (idx >= 0 && idx < sortedPending.length) {
+        var target = sortedPending[idx];
+        wsTasks = sortTasks(wsTasks.map(function (t) {
+          return t.id === target.id ? Object.assign({}, t, { done: true }) : t;
+        }));
+        wsRenderTasks();
+        return { text: 'Отлично! «' + target.title + '» выполнена ✅ Так держать! 🎉' };
+      }
+      return { text: 'Нет задачи с таким номером. Напишите /list, чтобы увидеть список.' };
+    }
+
+    var parsed = parseTask(value);
+    var looksLikeTask = parsed.title.length >= 3 &&
+      !NOT_TASK.test(value.trim()) &&
+      (parsed.due !== null || parsed.tags.length > 0 || parsed.priority !== 'normal' || parsed.repeat !== 'none' || TASK_VERBS.test(value));
+    if (looksLikeTask) {
+      var task = taskFromParsed(parsed);
+      wsTasks = sortTasks([task].concat(wsTasks));
+      wsRenderTasks();
+      return { text: confirmation(task), createdTask: task };
+    }
+    return wsAiReply(value);
+  }
+
+  /* ---- рендер чата и задач аккаунта ---- */
+
+  function wsBubbleNode(m) {
+    var wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.justifyContent = m.from === 'user' ? 'flex-end' : 'flex-start';
+    var b = document.createElement('div');
+    b.className = 'bubble ' + (m.from === 'user' ? 'bubble-user' : 'bubble-bot');
+    b.style.whiteSpace = 'pre-line';
+    if (m.ai && m.from === 'bot') {
+      var badge = document.createElement('span');
+      badge.className = 'ai-badge';
+      badge.innerHTML = '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg> ИИ';
+      b.appendChild(badge);
+    }
+    var body = document.createElement('div');
+    body.textContent = m.text;
+    b.appendChild(body);
+    if (m.buttons && m.buttons.length) {
+      var row = document.createElement('div');
+      row.className = 'bubble-msg-btns';
+      m.buttons.forEach(function (btn) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.textContent = btn.label;
+        el.addEventListener('click', function () { wsHandleButton(btn.action, btn.taskId, m.id); });
+        row.appendChild(el);
+      });
+      b.appendChild(row);
+    }
+    var time = document.createElement('span');
+    time.className = 'bubble-time';
+    time.textContent = m.time;
+    b.appendChild(time);
+    wrap.appendChild(b);
+    return wrap;
+  }
+
+  function wsRenderMessages() {
+    var box = $('ws-messages');
+    box.innerHTML = '';
+    wsMessages.forEach(function (m) { box.appendChild(wsBubbleNode(m)); });
+    if (wsTyping) {
+      var t = document.createElement('div');
+      t.style.display = 'flex';
+      t.style.justifyContent = 'flex-start';
+      t.innerHTML = '<div class="bubble bubble-bot"><span class="typing"><i></i><i></i><i></i></span></div>';
+      box.appendChild(t);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function wsHandleButton(action, taskId, msgId) {
+    wsMessages = wsMessages.map(function (m) {
+      return m.id === msgId ? Object.assign({}, m, { buttons: undefined }) : m;
+    });
+    wsRenderMessages();
+    var target = null;
+    for (var i = 0; i < wsTasks.length; i++) if (wsTasks[i].id === taskId) target = wsTasks[i];
+    if (action === 'done') {
+      wsTasks = sortTasks(wsTasks.map(function (t) {
+        return t.id === taskId ? Object.assign({}, t, { done: true }) : t;
+      }));
+      wsRenderTasks();
+      wsPushBot('Отлично! «' + (target ? target.title : 'Задача') + '» выполнена ✅');
+    } else {
+      wsPushBot('Хорошо, напомню ещё раз через 15 минут 🔔');
+    }
+    persistWs();
+  }
+
+  function wsPushBot(text, buttons) {
+    wsTyping = true;
+    wsRenderMessages();
+    window.setTimeout(function () {
+      wsTyping = false;
+      wsMessages.push({ id: uid(), from: 'bot', text: text, time: nowTime(), buttons: buttons || undefined });
+      wsRenderMessages(); wsRenderTasks(); persistWs();
+    }, 550 + Math.random() * 450);
+  }
+
+  function wsSend(raw) {
+    var value = (raw != null ? raw : $('ws-input').value).trim();
+    if (!value || wsTyping) return;
+    wsMessages.push({ id: uid(), from: 'user', text: value, time: nowTime() });
+    $('ws-input').value = '';
+    wsTyping = true;
+    wsRenderMessages(); persistWs();
+    window.setTimeout(function () {
+      var reply = wsProcess(value);
+      if (reply.createdTask) showToast('✅ Задача добавлена', '«' + reply.createdTask.title + '»');
+      wsTyping = false;
+      wsMessages.push({ id: uid(), from: 'bot', text: reply.text, time: nowTime(), ai: reply.ai });
+      wsRenderMessages(); wsRenderTasks(); persistWs();
+    }, 650 + Math.random() * 500);
+  }
+
+  function wsTaskNode(t) {
+    var row = document.createElement('div');
+    row.className = 'task' + (t.done ? ' done' : '');
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = t.done;
+    cb.setAttribute('aria-label', 'Отметить «' + t.title + '»');
+    cb.addEventListener('change', function () {
+      wsTasks = sortTasks(wsTasks.map(function (x) {
+        return x.id === t.id ? Object.assign({}, x, { done: !x.done }) : x;
+      }));
+      wsRenderTasks(); persistWs();
+    });
+    row.appendChild(cb);
+
+    var body = document.createElement('div');
+    body.style.flex = '1';
+    body.style.minWidth = '0';
+
+    var title = document.createElement('p');
+    title.className = 'task-title';
+    title.textContent = t.title;
+    body.appendChild(title);
+
+    var meta = document.createElement('div');
+    meta.className = 'task-meta';
+    if (t.dueISO) meta.appendChild(metaChip('', ICON_CLOCK, formatDue(new Date(t.dueISO))));
+    else {
+      var nd = document.createElement('span');
+      nd.className = 'no-due';
+      nd.textContent = 'без напоминания';
+      meta.appendChild(nd);
+    }
+    if (t.priority === 'high') meta.appendChild(metaChip('meta-high', ICON_FLAG, 'важно'));
+    if (t.priority === 'low') meta.appendChild(metaChip('meta-low', ICON_FLAG, 'низкий'));
+    if (t.repeat !== 'none') meta.appendChild(metaChip('meta-repeat', ICON_REPEAT, repeatLabel(t.repeat)));
+    t.tags.forEach(function (tag) {
+      var s = document.createElement('span');
+      s.className = 'tag';
+      s.textContent = '#' + tag;
+      meta.appendChild(s);
+    });
+    body.appendChild(meta);
+    row.appendChild(body);
+
+    var del = document.createElement('button');
+    del.className = 'task-del';
+    del.setAttribute('aria-label', 'Удалить «' + t.title + '»');
+    del.innerHTML = ICON_TRASH;
+    del.addEventListener('click', function () {
+      wsTasks = wsTasks.filter(function (x) { return x.id !== t.id; });
+      wsRenderTasks(); persistWs();
+    });
+    row.appendChild(del);
+    return row;
+  }
+
+  function wsRenderTasks() {
+    var list = $('ws-task-list');
+    if (!list) return;
+    list.innerHTML = '';
+    var sorted = sortTasks(wsTasks);
+    if (!sorted.length) {
+      var empty = document.createElement('div');
+      empty.className = 'tasks-empty';
+      empty.innerHTML = '<div class="big">🗒️</div><p>Пока пусто</p><small>Напишите задачу в чате или в поле выше</small>';
+      list.appendChild(empty);
+    } else {
+      sorted.forEach(function (t) { list.appendChild(wsTaskNode(t)); });
+    }
+    var doneCount = wsTasks.filter(function (t) { return t.done; }).length;
+    var active = wsTasks.length - doneCount;
+    var high = wsTasks.filter(function (t) { return !t.done && t.priority === 'high'; }).length;
+    $('ws-count-badge').textContent = String(active);
+    $('ws-stat-total').textContent = String(wsTasks.length);
+    $('ws-stat-active').textContent = String(active);
+    $('ws-stat-done').textContent = String(doneCount);
+    $('ws-stat-high').textContent = String(high);
+    var pr = $('ws-progress-row');
+    if (wsTasks.length) {
+      pr.style.display = 'block';
+      var pct = Math.round(doneCount / wsTasks.length * 100);
+      $('ws-progress-text').textContent = 'Выполнено ' + doneCount + ' из ' + wsTasks.length;
+      $('ws-progress-pct').textContent = pct + '%';
+      $('ws-progress-fill').style.width = pct + '%';
+    } else pr.style.display = 'none';
+    $('ws-clear-done').style.display = doneCount ? 'flex' : 'none';
+    $('ws-reminder').disabled = wsTyping || !wsTasks.some(function (t) { return !t.done; });
+  }
+
+  function wsAddTask() {
+    var value = $('ws-task-input').value.trim();
+    if (!value) return;
+    var p = parseTask(value);
+    var task = taskFromParsed({ title: p.title || value, due: p.due, priority: p.priority, tags: p.tags, repeat: p.repeat });
+    wsTasks = sortTasks([task].concat(wsTasks));
+    $('ws-task-input').value = '';
+    wsRenderTasks(); persistWs();
+    showToast('✅ Задача добавлена', '«' + task.title + '»');
+  }
+
+  function wsReminder() {
+    if (wsTyping) return;
+    var pending = sortTasks(wsTasks).filter(function (t) { return !t.done; });
+    var target = null;
+    for (var i = 0; i < pending.length; i++) if (pending[i].dueISO) { target = pending[i]; break; }
+    if (!target && pending.length) target = pending[0];
+    if (!target) return;
+    wsTyping = true;
+    wsRenderMessages();
+    window.setTimeout(function () {
+      wsTyping = false;
+      var text = '⏰ Напоминание!\nЧерез 15 минут: «' + target.title + '»' +
+        (target.dueISO ? '\n🕐 ' + formatDue(new Date(target.dueISO)) : '');
+      wsMessages.push({
+        id: uid(), from: 'bot', text: text, time: nowTime(),
+        buttons: [
+          { label: '✅ Готово', action: 'done', taskId: target.id },
+          { label: '⏰ Отложить', action: 'snooze', taskId: target.id }
+        ]
+      });
+      wsRenderMessages(); wsRenderTasks(); persistWs();
+    }, 600);
+  }
+
+  /* ---- переключение экранов ---- */
+
+  function showWorkspace(u) {
+    setSession(u);
+    document.body.classList.add('authed');
+    var name = u.name || u.email.split('@')[0];
+    var d = new Date();
+    $('ws-name').textContent = name;
+    $('ws-greet-name').textContent = name;
+    $('ws-email').textContent = u.email;
+    $('ws-avatar').textContent = (name.charAt(0) || '?');
+    $('ws-date').textContent = capitalize(WEEKDAYS_RU[d.getDay()]) + ', ' + d.getDate() + ' ' + MONTHS_RU[d.getMonth()];
+    closeAuth();
+    loadWsData();
+  }
+
+  function showLanding() {
+    setSession(null);
+    document.body.classList.remove('authed');
+  }
+
+  /* ---- диалог входа / регистрации ---- */
+
+  var authMode = 'register';
+  var authPending = false;
+
+  function updateAuthUi() {
+    var isReg = authMode === 'register';
+    $('tab-login').classList.toggle('active', !isReg);
+    $('tab-register').classList.toggle('active', isReg);
+    $('auth-title').textContent = isReg ? 'Создать аккаунт' : 'Вход в аккаунт';
+    $('auth-desc').textContent = isReg
+      ? 'Бесплатно, без подтверждений — задачи и чат сохранятся в этом браузере.'
+      : 'Ваши задачи и чат с ассистентом — всегда под рукой на этом устройстве.';
+    $('field-name').style.display = isReg ? 'block' : 'none';
+    $('auth-password').placeholder = isReg ? 'Минимум 6 символов' : 'Ваш пароль';
+    $('auth-password').setAttribute('autocomplete', isReg ? 'new-password' : 'current-password');
+    $('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
+    hideAuthError();
+  }
+  function showAuthError(t) { var e = $('auth-error'); e.textContent = t; e.classList.add('show'); }
+  function hideAuthError() { $('auth-error').classList.remove('show'); }
+  function openAuth(mode) { authMode = mode || 'login'; updateAuthUi(); $('auth-overlay').classList.add('open'); }
+  function closeAuth() { $('auth-overlay').classList.remove('open'); }
+
+  async function onAuthSubmit(e) {
+    e.preventDefault();
+    if (authPending) return;
+    var email = $('auth-email').value;
+    var password = $('auth-password').value;
+    var name = $('auth-name').value;
+    authPending = true;
+    $('auth-submit').disabled = true;
+    hideAuthError();
+    var res = authMode === 'register'
+      ? await registerUser(name, email, password)
+      : await loginUser(email, password);
+    authPending = false;
+    $('auth-submit').disabled = false;
+    if (res.error) { showAuthError(res.error); return; }
+    $('auth-email').value = ''; $('auth-password').value = ''; $('auth-name').value = '';
+    showWorkspace(res.user);
+    showToast(authMode === 'register' ? '🎉 Аккаунт создан!' : 'С возвращением! 👋',
+      authMode === 'register' ? 'Ваши задачи хранятся в аккаунте, в чате отвечает ассистент.' : 'Рады видеть вас снова.');
+  }
+
+  var toastTimer = null;
+  function showToast(title, text) {
+    $('ws-toast-title').textContent = title;
+    $('ws-toast-text').textContent = text || '';
+    var t = $('ws-toast');
+    t.classList.add('show');
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () { t.classList.remove('show'); }, 2800);
+  }
+
+  /* ---------------- инициализация ---------------- */
+
+  function init() {
+    renderStatic();
+    restore();
+    renderMessages();
+    renderTasks();
+
+    $('chat-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      send();
+    });
+    $('btn-reminder').addEventListener('click', demoReminder);
+    $('clear-done').addEventListener('click', function () {
+      tasks = tasks.filter(function (t) { return !t.done; });
+      renderTasks();
+      persist();
+    });
+
+    /* --- авторизация и рабочее пространство --- */
+    $('btn-login-open').addEventListener('click', function () { openAuth('login'); });
+    $('btn-upsell-auth').addEventListener('click', function () { openAuth('register'); });
+    $('btn-cta-auth').addEventListener('click', function () { openAuth('register'); });
+    $('tab-login').addEventListener('click', function () { authMode = 'login'; updateAuthUi(); });
+    $('tab-register').addEventListener('click', function () { authMode = 'register'; updateAuthUi(); });
+    $('auth-overlay').addEventListener('click', function (e) { if (e.target === this) closeAuth(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAuth(); });
+    $('auth-form').addEventListener('submit', onAuthSubmit);
+    $('btn-logout').addEventListener('click', showLanding);
+    $('ws-form').addEventListener('submit', function (e) { e.preventDefault(); wsSend(); });
+    $('ws-task-form').addEventListener('submit', function (e) { e.preventDefault(); wsAddTask(); });
+    $('ws-reminder').addEventListener('click', wsReminder);
+    $('ws-clear-chat').addEventListener('click', function () {
+      wsMessages = [{ id: uid(), from: 'bot', text: GREETING_WS, time: nowTime() }];
+      wsRenderMessages(); persistWs();
+    });
+    $('ws-clear-done').addEventListener('click', function () {
+      wsTasks = wsTasks.filter(function (t) { return !t.done; });
+      wsRenderTasks(); persistWs();
+    });
+    WS_SUGGESTIONS.forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = s;
+      b.addEventListener('click', function () { wsSend(s); });
+      $('ws-chips').appendChild(b);
+    });
+    var session = restoreSession();
+    if (session) showWorkspace(session);
+
+    var header = $('site-header');
+    var onScroll = function () {
+      header.classList.toggle('scrolled', window.scrollY > 8);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
